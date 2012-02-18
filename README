@@ -1,0 +1,27 @@
+This is a very experimental database connection pooling implementation for Django
+
+Usage is simple. When you have currently this in settings.py:
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': ...,
+    },
+    ...
+}
+alter it to:
+DATABASES = {
+    'default': {
+        'ENGINE': 'django_pooled',
+        'NAME': ...,
+        'OPTIONS': {
+            'WRAPS': 'django.db.backends.sqlite3',
+        }
+    },
+    ...
+}
+
+Does it work? Not really. There are some problems:
+  - Django doesn't offer any nice way for separating taking connections from initializing
+    the state of the connection. This is all done in ._cursor(). Due to this, if the settings
+    change -> you are screwed. This isn't really a problem in normal usage, but prevents
+    running the Django's test suite.
