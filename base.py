@@ -19,7 +19,6 @@ class PoolKey(object):
 class PoolObject(object):
     def __init__(self, key, connection, pool_opts):
         self.on_connect = pool_opts['ON_CONNECT']
-        self.on_close = pool_opts['ON_CLOSE']
         self.key = key
         self.connection = connection
         self.in_use = True
@@ -73,10 +72,10 @@ class Pool(object):
         if conn.abandoned:
             return
         try:
-            cursor = conn.connection.cursor()
-            for command in conn.on_close:
-                cursor.execute(command)
-            conn.connection.rollback()
+            try:
+                conn.connection.rollback()
+            except:
+                pass
             conn.in_use = False
         except DatabaseError, e:
             with self.lock:
@@ -125,14 +124,12 @@ def DatabaseWrapper(settings, *args, **kwargs):
     But not true! He is actually calling this factory method.
     """
     settings = settings.copy()
-    settings['ENGINE'] = wraps =  settings['OPTIONS']['WRAPS']
+    settings['ENGINE'] = wraps =  settings['OPTIONS'].pop('WRAPS')
+    if wraps is None:
+        raise RuntimeError('You must define OPTIONS["WRAPS"] in settings '
+                           'for alias %s.' % args[0])
     dbwrapper = load_backend(wraps).DatabaseWrapper
-
-    pool_opts = dict(ON_CLOSE=settings['OPTIONS']['ON_CLOSE'],
-                     ON_CONNECT=settings['OPTIONS']['ON_CONNECT'])
-    del settings['OPTIONS']['WRAPS']
-    del settings['OPTIONS']['ON_CLOSE']
-    del settings['OPTIONS']['ON_CONNECT']
+    pool_opts = dict(ON_CONNECT=settings['OPTIONS'].pop('ON_CONNECT', 'select 1'))
 
     def _cursor(self):
         key = PoolKey(self.alias, self.settings_dict)
