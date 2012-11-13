@@ -1,4 +1,7 @@
-This is a very experimental database connection pooling implementation for Django
+This is a very experimental database connection pooling implementation for Django.
+
+This implementation requires use of ticket 19274's work, available
+from http://github.com/akaariai/django.git, branch ticket_19274.
 
 Usage is simple. When you have currently this in settings.py:
 DATABASES = {
@@ -20,8 +23,13 @@ DATABASES = {
     ...
 }
 
-Does it work? Not really. There are some problems:
-  - Django doesn't offer any nice way for separating taking connections from initializing
-    the state of the connection. This is all done in ._cursor(). Due to this, if the settings
-    change -> you are screwed. This isn't really a problem in normal usage, but prevents
-    running the Django's test suite.
+There is one additional setting one can define in OPTIONS:
+ON_CONNECT -> String which defines what SQL to run on connections
+fetched from the pool. The SQL is run to make sure the connection
+is actually working. The default is "SELECT 1".
+
+On disconnect rollback is called, nothing else is done.
+
+The Django's test suite is passing on all core backends (on Oracle
+you need to use ON_CONNECT = SELECT 1 FROM DUAL). Gis backends aren't
+yet upgraded.
