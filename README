@@ -1,9 +1,8 @@
-This is a very experimental database connection pooling implementation for Django.
-
-This implementation requires use of ticket 19274's work, available
-from http://github.com/akaariai/django.git, branch ticket_19274.
+This is a very experimental database connection pooling implementation for
+Django. The pool requires Django's master HEAD.
 
 Usage is simple. When you have currently this in settings.py:
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -11,7 +10,9 @@ DATABASES = {
     },
     ...
 }
+
 alter it to:
+
 DATABASES = {
     'default': {
         'ENGINE': 'django_pooled',
@@ -23,7 +24,10 @@ DATABASES = {
     ...
 }
 
-There is one additional setting one can define in OPTIONS:
+There is a separate implementation for psycopg2. Using this is even simpler,
+just set django_pooled.psycopg2 as ENGINE and everything should just work.
+
+There is one additional setting you can define in OPTIONS:
 ON_CONNECT -> String which defines what SQL to run on connections
 fetched from the pool. The SQL is run to make sure the connection
 is actually working. The default is "SELECT 1".
@@ -32,4 +36,11 @@ On disconnect rollback is called, nothing else is done.
 
 The Django's test suite is passing on all core backends (on Oracle
 you need to use ON_CONNECT = SELECT 1 FROM DUAL). Gis backends aren't
-yet upgraded.
+yet tested.
+
+This pooler is missing some essential features, most notably the pool will
+never release unused connections. If you get momentarily 100 simultaneous
+connections, the pool will keep all 100 connections forever.
+
+Note that this implementation isn't meant for production use. This is just
+a proof of concept.

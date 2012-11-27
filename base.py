@@ -120,23 +120,23 @@ class PoolReleaser(object):
         if self.pool_object:
              self.release()
 
-class WrappedCreation(object):
+class CreationWrapper(object):
     """
     Need to wrap the real creation object so that it is possible to destroy
     the test database after tests.
     """
-    def __init__(self, real_creation):
-        self.real_creation = real_creation
+    def __init__(self, wrapped_creation):
+        self.wrapped_creation = wrapped_creation
 
     def __getattr__(self, attr):
-        return getattr(self.real_creation, attr)
+        return getattr(self.wrapped_creation, attr)
 
     def destroy_test_db(self, *args, **kwargs):
         # Destroying a db isn't possible if there are still connections open
         # to the test db. So, close all pool connection before trying to
         # destroy the DB.
         pool.close_all()
-        self.real_creation.destroy_test_db(*args, **kwargs)
+        self.wrapped_creation.destroy_test_db(*args, **kwargs)
 
 # wrapped engine -> dynamic wrapper
 dyn_wrap_cache = {}
@@ -187,5 +187,5 @@ def DatabaseWrapper(settings, *args, **kwargs):
         dyn_wrap_cache[wraps] = dynwrap
     conn = dynwrap(settings, *args, **kwargs)
     conn.pool_releaser = PoolReleaser()
-    conn.creation = WrappedCreation(conn.creation)
+    conn.creation = CreationWrapper(conn.creation)
     return conn
