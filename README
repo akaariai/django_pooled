@@ -1,5 +1,5 @@
 This is a very experimental database connection pooling implementation for
-Django. The pool requires Django's master HEAD.
+Django. The pool requires Django's master/HEAD.
 
 Usage is simple. When you have currently this in settings.py:
 
@@ -34,7 +34,7 @@ working. The default is "SELECT 1". The ON_CONNECT can also be a callback,
 the arguments are the candidate connection and the Pool. See psycopg2/base.py
 for example.
 
-If the execution of the ON_CONNECT string or the callback raise any kind of
+If the execution of the ON_CONNECT string or the callback raises any kind of
 exception, the connection is assumed to be in erroneous state and it is
 discarded. Otherwise the connection is deemed ready to be used by the
 client.
@@ -45,9 +45,11 @@ The Django's test suite is passing on all core backends (on Oracle
 you need to use ON_CONNECT = SELECT 1 FROM DUAL). Gis backends aren't
 yet tested.
 
-This pooler is missing some essential features, most notably the pool will
-never release unused connections. If you get momentarily 100 simultaneous
-connections, the pool will keep all 100 connections forever.
+The pool will check all connections at most once in 10 seconds. The check
+happens only on taking a new connection. Those connections which haven't
+been used in 10 seconds are closed and removed from the pool.
 
-Note that this implementation isn't meant for production use. This is just
-a proof of concept.
+The pooler is still missing some essential features - logging, many config
+options and so on.
+
+Note that this implementation isn't meant for production use.

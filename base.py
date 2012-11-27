@@ -1,8 +1,14 @@
 import copy
+from datetime import datetime, timedelta
 import threading
 
 from django.db.utils import load_backend
 from django.utils import six
+
+# Once in POOL_CULL_INTERVAL connections which haven't been used since last
+# cull will be closed. The culling happens only when new connection is taken -
+# if no new connections arrive, there will also be no cleanup.
+POOL_CULL_INTERVAL = timedelta(seconds=10)
 
 class PoolKey(object):
     def __init__(self, alias, settings):
@@ -24,34 +30,46 @@ class PoolObject(object):
         self.key = key
         self.connection = connection
         self.in_use = True
-        self.abandoned = False
+        self.last_release = datetime.now()
+
+    def set_in_use(self):
+        self.in_use = True
+
+    def set_unused(self):
+        self.in_use = False
+        self.last_release = datetime.now()
 
 class Pool(object):
-    pools = {}
-    lock = threading.Lock()
+    def __init__(self):
+        self.pools = {}
+        self.lock = threading.Lock()
+        self.last_cull = datetime.now()
 
-    def _status(self):
+    def _status(self, for_key=None):
         for key, conns in self.pools.items():
+            if for_key is not None and key != for_key:
+                continue
             if len([c for c in conns if c.in_use]) >= 0:
                 print(key, len([c for c in conns if c.in_use]))
             for conn in conns:
-                print(conn, conn.in_use, conn.abandoned)
+                print(conn, conn.in_use)
 
     def acquire_connection(self, key):
-        conn = None
-        while conn is None:
+        while True:
             with self.lock:
                 conn = self.acquire_connection_inner(key)
                 if conn is None:
                     # No available connections
-                    return None
+                    break
                 try:
                     self.verify_connection(conn)
+                    break
                 except:
-                    conn.abandoned = True
-                    self.pools[key].remove(conn)
-                    conn = None
-                    raise
+                    self.abandon_connection(key, conn)
+                    # log me
+        if datetime.now() - self.last_cull > POOL_CULL_INTERVAL:
+            self.cull_pool()
+            self.last_cull = datetime.now()
         return conn
 
     def acquire_connection_inner(self, key):
@@ -59,11 +77,27 @@ class Pool(object):
             for conn in self.pools[key]:
                 if conn.in_use:
                     continue
-                conn.in_use = True
+                conn.set_in_use()
                 return conn
         except KeyError:
             self.pools[key] = []
             return
+
+    def abandon_connection(self, key, conn):
+        try:
+            conn.connection.close()
+        except:
+            pass
+            # log me
+        self.pools[key].remove(conn)
+
+    def cull_pool(self):
+        with self.lock:
+            for key, conns in self.pools.items():
+                for conn in conns:
+                    long_since_release = conn.last_release < datetime.now() - POOL_CULL_INTERVAL
+                    if not conn.in_use and long_since_release:
+                        self.abandon_connection(key, conn)
 
     def add_connection(self, conn):
         with self.lock:
@@ -79,16 +113,14 @@ class Pool(object):
                 conn.on_connect(conn, self)
 
     def release_connection(self, conn):
-        if conn.abandoned:
-            assert not conn.in_use
-            return
         try:
             conn.connection.rollback()
         except:
             # Uqly, but there is no common exception class for different
-            # DB adapters. At least logging would be good here...
+            # DB adapters.
+            # log me
             pass
-        conn.in_use = False
+        conn.set_unused()
 
     def close_all(self):
         with self.lock:
