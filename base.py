@@ -2,6 +2,7 @@ import copy
 import threading
 
 from django.db.utils import load_backend
+from django.utils import six
 
 class PoolKey(object):
     def __init__(self, alias, settings):
@@ -70,9 +71,12 @@ class Pool(object):
 
     def verify_connection(self, conn):
         if conn.on_connect:
-            cursor = conn.connection.cursor()
-            cursor.execute(conn.on_connect)
-            cursor.fetchone()
+            if isinstance(conn.on_connect, six.string_types):
+                cursor = conn.connection.cursor()
+                cursor.execute(conn.on_connect)
+                cursor.fetchone()
+            else:
+                conn.on_connect(conn, self)
 
     def release_connection(self, conn):
         if conn.abandoned:
@@ -111,14 +115,14 @@ class PoolReleaser(object):
 
     def release(self):
         if self.pool_object:
-             self.pool.release_connection(self.pool_object)
-             self.pool_object = None
+            self.pool.release_connection(self.pool_object)
+            self.pool_object = None
 
     def __del__(self):
         # Trick: when the DBWrapper below is carbage collected, I will get
         # called. Hopefully.
         if self.pool_object:
-             self.release()
+            self.release()
 
 class CreationWrapper(object):
     """

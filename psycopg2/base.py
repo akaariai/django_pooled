@@ -1,10 +1,16 @@
 from django_pooled.base import PoolKey, PoolObject, PoolReleaser, CreationWrapper, pool
 from django.db.backends.postgresql_psycopg2.base import DatabaseWrapper as DjangoDBWrapper
+import psycopg2
 
 class DatabaseWrapper(DjangoDBWrapper):
-    def __init__(self, settings, alias, *args, **kwargs):
-        self.pool_opts = dict(ON_CONNECT=settings['OPTIONS'].pop('ON_CONNECT', 'select 1'))
-        super(DatabaseWrapper, self).__init__(settings, alias, *args, **kwargs)
+    def __init__(self, settings, *args, **kwargs):
+        def on_connect_callback(conn, pool):
+            tx_status = conn.connection.get_transaction_status()
+            if tx_status != psycopg2.extensions.TRANSACTION_STATUS_IDLE:
+                raise Exception("This connection isn't usable!")
+
+        self.pool_opts = dict(ON_CONNECT=settings['OPTIONS'].pop('ON_CONNECT', on_connect_callback))
+        super(DatabaseWrapper, self).__init__(settings, *args, **kwargs)
         # Pool releaser is needed to break the limitation that objects with
         # reference cycles + __del__ do not get garbage collected.
         self.pool_releaser = PoolReleaser()

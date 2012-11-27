@@ -28,9 +28,16 @@ There is a separate implementation for psycopg2. Using this is even simpler,
 just set django_pooled.psycopg2 as ENGINE and everything should just work.
 
 There is one additional setting you can define in OPTIONS:
-ON_CONNECT -> String which defines what SQL to run on connections
-fetched from the pool. The SQL is run to make sure the connection
-is actually working. The default is "SELECT 1".
+ON_CONNECT -> String which defines what SQL to run on connections fetched
+from the pool. The SQL is run to make sure the connection is actually
+working. The default is "SELECT 1". The ON_CONNECT can also be a callback,
+the arguments are the candidate connection and the Pool. See psycopg2/base.py
+for example.
+
+If the execution of the ON_CONNECT string or the callback raise any kind of
+exception, the connection is assumed to be in erroneous state and it is
+discarded. Otherwise the connection is deemed ready to be used by the
+client.
 
 On disconnect rollback is called, nothing else is done.
 
