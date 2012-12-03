@@ -94,7 +94,7 @@ class Pool(object):
     def cull_pool(self):
         with self.lock:
             for key, conns in self.pools.items():
-                for conn in conns:
+                for conn in conns[:]:
                     long_since_release = conn.last_release < datetime.now() - POOL_CULL_INTERVAL
                     if not conn.in_use and long_since_release:
                         self.abandon_connection(key, conn)
